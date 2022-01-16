@@ -28,9 +28,10 @@ model.eval()
 
 embeddings = []
 names = []
+count = 0
 
 for usr in os.listdir(IMG_PATH):
-    embeds = []
+    count = count + 1
     for file in glob.glob(os.path.join(IMG_PATH, usr)+"/*.jpg"):
         # print(usr)
         try:
@@ -38,17 +39,13 @@ for usr in os.listdir(IMG_PATH):
         except:
             continue
         with torch.no_grad():
-            embeds.append(model(trans(img).to(device).unsqueeze(0))) #1 anh, kich thuoc [1,512]
-    if len(embeds) == 0:
-        continue
-    embedding = torch.cat(embeds).mean(0, keepdim=True) #dua ra trung binh cua 30 anh, kich thuoc [1,512]
-    embeddings.append(embedding) # 1 cai list n cai [1,512]
-    # print(embedding)
-    names.append(usr)
+            embedding=model(trans(img).to(device).unsqueeze(0))
+            embeddings.append(embedding)
+            names.append(usr)
     
-embeddings = torch.cat(embeddings) #[n,512]
+embeddings = torch.cat(embeddings)
 names = np.array(names)
 
 torch.save(embeddings, DATA_PATH+"/known_faces.pth")
 np.save(DATA_PATH+"/known_names", names)
-print('Update Completed! There are {0} people in FaceLists'.format(names.shape[0]))
+print('Update Completed! There are {0} people in FaceLists'.format(count))

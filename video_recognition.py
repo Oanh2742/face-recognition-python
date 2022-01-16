@@ -5,6 +5,7 @@ from torchvision import transforms
 import numpy as np
 from PIL import Image
 import time
+import os
 
 def trans(img):
     transform = transforms.Compose([
@@ -18,7 +19,7 @@ def load_faceslist():
     names = np.load("./data/known_names.npy")
     return embeds, names
 
-def inference(model, face, local_embeds, threshold = 3
+def inference(model, face, local_embeds, threshold = 1
 ):
     #local: [n,512] voi n la so nguoi trong known_faces
     embeds = []
@@ -32,16 +33,15 @@ def inference(model, face, local_embeds, threshold = 3
     norm_score = torch.sum(torch.pow(norm_diff, 2), dim=1) #(1,n), moi cot la tong khoang cach euclide so vs embed moi
     
     min_dist, embed_idx = torch.min(norm_score, dim = 1)
-    print(min_dist*power, names[embed_idx])
+    #print(min_dist*power, names[embed_idx])
     # print(min_dist.shape)
     if min_dist*power > threshold:
-        return -1, -1
+        return -1,torch.tensor([-1])
     else:
         return embed_idx, min_dist.double()
 
 def extract_face(box, img, margin=20):
     face_size = 160
-    img_size = (640,480)
     margin = [
         margin * (box[2] - box[0]) / (face_size - margin),
         margin * (box[3] - box[1]) / (face_size - margin),
@@ -49,11 +49,11 @@ def extract_face(box, img, margin=20):
     box = [
         int(max(box[0] - margin[0] / 2, 0)),
         int(max(box[1] - margin[1] / 2, 0)),
-        int(min(box[2] + margin[0] / 2, img_size[0])),
-        int(min(box[3] + margin[1] / 2, img_size[1])),
+        int(min(box[2] + margin[0] / 2, 640)),
+        int(min(box[3] + margin[1] / 2, 480)),
     ]
     img = img[box[1]:box[3], box[0]:box[2]]
-    face = cv2.resize(img,(face_size, face_size), interpolation=cv2.INTER_AREA)
+    face = cv2.resize(img,(160, 160), interpolation=cv2.INTER_AREA)
     face = Image.fromarray(face)
     return face
 
@@ -69,12 +69,12 @@ if __name__ == "__main__":
     mtcnn = MTCNN(thresholds= [0.7, 0.8, 0.8] ,keep_all=True, device = device)
     embeddings, names = load_faceslist()
 
+    current_path = os.path.abspath(".")
     video_name = input("Enter image file name: ")
-    video = cv2.VideoCapture("./raw/"+video_name)
-    w = video.get(cv2.CAP_PROP_FRAME_WIDTH)
-    h = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    video = cv2.VideoCapture(current_path + "/raw/"+video_name)
+    video.set(cv2.CAP_PROP_FRAME_WIDTH,640)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT,480)
 
-   
     while video.isOpened():
         ret, frame = video.read()
         if ret:
@@ -83,10 +83,11 @@ if __name__ == "__main__":
                 for box in boxes:
                     box = box.astype(int)
                     face = extract_face(box, frame)
-                    idx, score = inference(model, face, embeddings)
+                    idx, diff = inference(model, face, embeddings)
+                    score = diff.item()*power
                     label = "unknown"
                     if idx != -1:
-                        label = names[idx]
+                        label = names[idx] + "_{:.4f}".format(score)
                     frame = cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),(0,255,0),4)
                     (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
                     frame = cv2.rectangle(frame, (box[0], box[3]), (box[0] + w, box[3]+20), (0,255,0), -1)

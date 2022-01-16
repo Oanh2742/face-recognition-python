@@ -18,7 +18,7 @@ def load_faceslist():
     names = np.load("./data/known_names.npy")
     return embeds, names
 
-def inference(model, face, local_embeds, threshold = 3):
+def inference(model, face, local_embeds, threshold = 1):
     #local: [n,512] voi n la so nguoi trong known_faces
     embeds = []
     # print(trans(face).unsqueeze(0).shape)
@@ -31,10 +31,10 @@ def inference(model, face, local_embeds, threshold = 3):
     norm_score = torch.sum(torch.pow(norm_diff, 2), dim=1) #(1,n), moi cot la tong khoang cach euclide so vs embed moi
     
     min_dist, embed_idx = torch.min(norm_score, dim = 1)
-    print(min_dist*power, names[embed_idx])
+    #print(min_dist*power, names[embed_idx])
     # print(min_dist.shape)
     if min_dist*power > threshold:
-        return -1, -1
+        return -1, torch.tensor([-1])
     else:
         return embed_idx, min_dist.double()
 
@@ -81,10 +81,11 @@ if __name__ == "__main__":
                 for box in boxes:
                     box = box.astype(int)
                     face = extract_face(box, frame)
-                    idx, score = inference(model, face, embeddings)
+                    idx, diff = inference(model, face, embeddings)
+                    score = diff.item()*power
                     label = "unknown"
                     if idx != -1:
-                        label = names[idx]
+                        label = names[idx] + "_{:.3f}".format(score)
                     frame = cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),(0,255,0),4)
                     (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)
                     frame = cv2.rectangle(frame, (box[0], box[3]), (box[0] + w, box[3]+20), (0,255,0), -1)
